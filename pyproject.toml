@@ -1,0 +1,112 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aratta"
+version = "0.1.0"
+description = "A sovereignty layer for AI. Local models are the foundation. Cloud providers are callable services. SCRI is the language."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "SCRI Labs" },
+]
+keywords = [
+    "ai",
+    "llm",
+    "scri",
+    "sovereignty",
+    "local-first",
+    "anthropic",
+    "openai",
+    "google",
+    "gemini",
+    "grok",
+    "xai",
+    "multi-provider",
+    "circuit-breaker",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.5.0",
+    "httpx>=0.26.0",
+    "python-dotenv>=1.0.0",
+    "sse-starlette>=1.8.0",
+    "rich>=13.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "mypy>=1.8.0",
+    "ruff>=0.4.0",
+    "pre-commit>=3.6.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/scri-labs/aratta"
+Documentation = "https://github.com/scri-labs/aratta#readme"
+Repository = "https://github.com/scri-labs/aratta"
+Issues = "https://github.com/scri-labs/aratta/issues"
+Changelog = "https://github.com/scri-labs/aratta/blob/main/CHANGELOG.md"
+
+[project.scripts]
+aratta = "aratta.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aratta"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "N",    # pep8-naming
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "TCH",  # flake8-type-checking
+]
+ignore = [
+    "E501",    # line length — handled by formatter
+    "UP042",   # StrEnum — str+Enum is more portable across 3.11+
+    "TC003",   # move stdlib imports to TYPE_CHECKING — hurts readability
+    "SIM105",  # contextlib.suppress — try/except/pass is clearer in callbacks
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["aratta"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-ra -q"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
