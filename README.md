@@ -1,5 +1,9 @@
 # Aratta
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![Tests](https://img.shields.io/badge/tests-82%20passing-green.svg)](tests/)
+
 *The land that traded with empires but was never conquered.*
 
 ---
@@ -85,7 +89,9 @@ SCRI: `Message`, `ToolCall`, `Usage`, `FinishReason`. One language. Every provid
 ## Quick Start
 
 ```bash
-pip install aratta
+git clone https://github.com/MAXAPIPULL00/aratta.git
+cd aratta
+pip install -e .
 aratta init                   # pick providers, set API keys, configure local
 aratta serve                  # starts on :8084
 ```
@@ -93,6 +99,9 @@ aratta serve                  # starts on :8084
 The `init` wizard walks you through setup — which providers to enable,
 API keys, and local model configuration. Ollama, vLLM, and llama.cpp
 are supported as local backends. Local is the default. Cloud is optional.
+
+> **Note:** Requires Python 3.11 or newer. PyPI package coming soon —
+> for now, install from source as shown above.
 
 ### Use it
 
@@ -305,6 +314,43 @@ tool executor with audit logging.
 
 Details: [docs/agents.md](docs/agents.md)
 
+## Testing
+
+```bash
+pytest                        # Run all 82 tests
+pytest --cov=aratta           # Run with coverage
+pytest tests/test_resilience/ # Run a specific suite
+```
+
+The test suite covers:
+
+| Suite | Tests | What it covers |
+|-------|-------|---------------|
+| `test_core/` | Type system | SCRI types, serialization, validation |
+| `test_providers/` | All 5 adapters | Anthropic, OpenAI, Google, xAI, Local message/tool conversion |
+| `test_resilience/` | Circuit breaker | State transitions, thresholds, half-open recovery |
+| `test_agents/` | Agent loop | ReAct iterations, tool execution, exit conditions |
+| `test_tools/` | Tool registry | Registration, format export, duplicate handling |
+| `test_server.py` | API endpoints | Health, chat, models, error responses |
+
+## Environment Variables
+
+Copy `.env.example` to `.env` before running `aratta init`. API keys are
+the only required configuration — and only for the providers you enable.
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ANTHROPIC_API_KEY` | If using Claude | Anthropic API key (`sk-ant-...`) |
+| `OPENAI_API_KEY` | If using GPT | OpenAI API key (`sk-...`) |
+| `GOOGLE_API_KEY` | If using Gemini | Google AI API key |
+| `XAI_API_KEY` | If using Grok | xAI API key (`xai-...`) |
+| `ARATTA_PORT` | No | Server port (default: `8084`) |
+| `ARATTA_HOST` | No | Bind address (default: `0.0.0.0`) |
+| `LOG_LEVEL` | No | Logging level (default: `INFO`) |
+
+Local models (Ollama, vLLM, llama.cpp) don't need API keys. If you're
+running local-only, you don't need a `.env` file at all.
+
 ## Configuration
 
 `~/.aratta/config.toml`:
@@ -341,6 +387,30 @@ cooldown_seconds = 600
 Environment variables override TOML. API keys are read from env
 (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `XAI_API_KEY`).
 
+## How It Compares
+
+| Feature | Aratta | LiteLLM | OpenRouter | Portkey |
+|---------|--------|---------|------------|---------|
+| Multi-provider routing | Yes | Yes | Yes | Yes |
+| Local-first (Ollama/vLLM) | Foundation | Supported | No | No |
+| Self-healing adapters | Yes | No | No | No |
+| Circuit breakers | Yes | No | No | Yes |
+| Health monitoring | Per-provider | Basic | No | Yes |
+| Provider fallback | Automatic | Configurable | Automatic | Configurable |
+| Agent framework | Built-in ReAct | No | No | No |
+| Universal type system | SCRI | Partial | No | No |
+| Human approval queue | Yes (fixes) | No | No | No |
+| Adapter hot-reload | Yes | No | No | No |
+| Self-hosted | Yes | Yes | No (proxy) | Cloud + gateway |
+| Vendor lock-in | None | Low | Medium | Medium |
+
+Aratta's differentiator is **self-healing** — when a provider changes
+their API, the system diagnoses the break with a local model, researches
+the fix via web search, and generates a confidence-scored patch. LiteLLM
+is the closest alternative for multi-provider routing, but it relies on
+manual updates when providers change. Aratta treats that as a solved
+problem.
+
 ## Project Structure
 
 ```
@@ -368,7 +438,7 @@ src/aratta/
 ## Development
 
 ```bash
-git clone https://github.com/scri-labs/aratta.git
+git clone https://github.com/MAXAPIPULL00/aratta.git
 cd aratta
 python -m venv .venv
 .venv/Scripts/activate      # Windows
@@ -384,6 +454,14 @@ ruff check src/ tests/      # clean
 - [Providers](docs/providers.md) — supported providers + writing your own
 - [Model Aliases](docs/model-aliases.md) — routing by capability
 - [Agent Framework](docs/agents.md) — ReAct agents across providers
+
+## Built With AI
+
+This project was built with significant AI assistance (Claude). The
+architecture, code, and documentation were developed through human-AI
+collaboration. We're upfront about this — and we think it validates the
+thesis: if AI tools are powerful enough to build their own sovereignty
+layer, they should be powerful enough to use it.
 
 ## License
 

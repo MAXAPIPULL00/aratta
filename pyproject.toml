@@ -61,11 +61,11 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/scri-labs/aratta"
-Documentation = "https://github.com/scri-labs/aratta#readme"
-Repository = "https://github.com/scri-labs/aratta"
-Issues = "https://github.com/scri-labs/aratta/issues"
-Changelog = "https://github.com/scri-labs/aratta/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/MAXAPIPULL00/aratta"
+Documentation = "https://github.com/MAXAPIPULL00/aratta#readme"
+Repository = "https://github.com/MAXAPIPULL00/aratta"
+Issues = "https://github.com/MAXAPIPULL00/aratta/issues"
+Changelog = "https://github.com/MAXAPIPULL00/aratta/blob/main/CHANGELOG.md"
 
 [project.scripts]
 aratta = "aratta.cli:main"

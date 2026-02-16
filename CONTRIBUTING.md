@@ -5,7 +5,7 @@ Thanks for your interest in contributing. Here's how to get started.
 ## Development Setup
 
 ```bash
-git clone https://github.com/scri-labs/aratta.git
+git clone https://github.com/MAXAPIPULL00/aratta.git
 cd aratta
 python -m venv .venv
 source .venv/bin/activate   # Linux / macOS
