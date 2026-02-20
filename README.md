@@ -141,8 +141,13 @@ Route by capability, not by provider model ID:
 | `reason` | claude-opus-4-5-20251101 | Anthropic |
 | `code` | claude-sonnet-4-5-20250929 | Anthropic |
 | `cheap` | gemini-2.5-flash-lite | Google |
-| `gpt` | gpt-4.1 | OpenAI |
+| `gpt` | gpt-5.2 | OpenAI |
+| `gpt-mini` | gpt-5-mini | OpenAI |
+| `gemini-pro` | gemini-3.1-pro-preview | Google |
+| `gemini-3.1` | gemini-3.1-pro-preview | Google |
+| `image` | gemini-3-pro-image-preview | Google |
 | `grok` | grok-4-1-fast | xAI |
+| `grok-reason` | grok-4-1-fast-reasoning | xAI |
 | `embed` | text-embedding-3-large | OpenAI |
 
 Aliases are configurable in `~/.aratta/config.toml`. Point `reason` at

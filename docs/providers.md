@@ -14,11 +14,11 @@ so one adapter covers them all.
 
 | Feature | Ollama | vLLM | llama.cpp |
 |---------|--------|------|-----------|
-| Chat | ✅ | ✅ | ✅ |
-| Streaming | ✅ | ✅ | ✅ |
-| Tool calling | ✅ (model-dependent) | ✅ | ✅ |
-| Embeddings | ✅ | ✅ | ❌ |
-| Vision | Model-dependent | Model-dependent | ❌ |
+| Chat | Yes | Yes | Yes |
+| Streaming | Yes | Yes | Yes |
+| Tool calling | Yes (model-dependent) | Yes | Yes |
+| Embeddings | Yes | Yes | No |
+| Vision | Model-dependent | Model-dependent | No |
 | Default port | 11434 | 8000 | 8080 |
 
 ```bash
@@ -35,62 +35,70 @@ and vision.
 
 | Feature | Supported |
 |---------|-----------|
-| Chat | ✅ |
-| Streaming | ✅ (SSE) |
-| Tool calling | ✅ (native) |
-| Vision | ✅ (base64 + URL) |
-| Extended thinking | ✅ (budget_tokens) |
-| Prompt caching | ✅ (automatic) |
-| Embeddings | ❌ (use OpenAI) |
+| Chat | Yes |
+| Streaming | Yes (SSE) |
+| Tool calling | Yes (native) |
+| Vision | Yes (base64 + URL) |
+| Extended thinking | Yes (budget_tokens) |
+| Prompt caching | Yes (automatic) |
+| Embeddings | No (use OpenAI) |
 
 Auth: `ANTHROPIC_API_KEY` environment variable.
 
 ## OpenAI (GPT)
 
-Supports both the Responses API (default) and Chat Completions API (legacy).
-GPT-4.1 series, O-series reasoning models.
+Uses the official `openai` Python SDK. Supports both the Responses API
+(default) and Chat Completions API (legacy). 7 models: GPT-5.2 series,
+GPT-4.1 series, and O-series reasoning models.
 
 | Feature | Supported |
 |---------|-----------|
-| Chat | ✅ |
-| Streaming | ✅ |
-| Tool calling | ✅ (function calling) |
-| Vision | ✅ |
-| Reasoning | ✅ (reasoning_effort param) |
-| Embeddings | ✅ (text-embedding-3) |
+| Chat | Yes |
+| Streaming | Yes |
+| Tool calling | Yes (function calling) |
+| Vision | Yes |
+| Reasoning | Yes (reasoning_effort param) |
+| Embeddings | Yes (text-embedding-3) |
 
 Auth: `OPENAI_API_KEY` environment variable.
 
 ## Google (Gemini)
 
-Supports Gemini 3 and 2.5 series with thinking levels, function calling,
-code execution results, and embeddings.
+Uses the official `google-genai` SDK. 8 models across Gemini 3.1, 3, and
+2.5 series — including Gemini 3.1 Pro (reasoning/agentic), custom tools
+variant, and Image Pro for image generation.
 
 | Feature | Supported |
 |---------|-----------|
-| Chat | ✅ |
-| Streaming | ✅ (SSE) |
-| Tool calling | ✅ (functionDeclarations) |
-| Vision | ✅ (inlineData) |
-| Thinking | ✅ (thinkingLevel / thinkingBudget) |
-| Embeddings | ✅ (batchEmbedContents) |
+| Chat | Yes |
+| Streaming | Yes (SSE) |
+| Tool calling | Yes (functionDeclarations) |
+| Vision | Yes (inlineData) |
+| Thinking | Yes (thinkingLevel / thinkingBudget) |
+| Image generation | Yes (gemini-3-pro-image-preview) |
+| Embeddings | Yes (embed_content) |
 
 Auth: `GOOGLE_API_KEY` environment variable.
 
 ## xAI (Grok)
 
-OpenAI-compatible API with agentic server-side tools (web search, X search,
-code execution, collections search).
+Uses the official `xai_sdk` package with the Responses API (gRPC transport).
+4 models with agentic server-side tools (web search, X search, code execution,
+collections search). Supports conversation chaining via `previous_response_id`
+and server-side message persistence via `store_messages`.
 
 | Feature | Supported |
 |---------|-----------|
-| Chat | ✅ |
-| Streaming | ✅ |
-| Tool calling | ✅ (function + server-side) |
-| Vision | ✅ |
-| Web search | ✅ (builtin tool) |
-| X/Twitter search | ✅ (builtin tool) |
-| Embeddings | ✅ |
+| Chat | Yes |
+| Streaming | Yes |
+| Tool calling | Yes (function + server-side) |
+| Vision | Yes |
+| Web search | Yes (builtin tool) |
+| X/Twitter search | Yes (builtin tool) |
+| Code execution | Yes (builtin tool) |
+| Conversation chaining | Yes (previous_response_id) |
+| Encrypted thinking | Yes (grok-4, grok-4-1-fast-reasoning) |
+| Embeddings | No |
 
 Auth: `XAI_API_KEY` environment variable.
 
@@ -107,7 +115,7 @@ class MyProvider(BaseProvider):
     display_name = "My Provider"
 
     async def chat(self, request):
-        # Translate SCRI request → your API → SCRI response
+        # Translate SCRI request -> your API -> SCRI response
         ...
 
     async def chat_stream(self, request):

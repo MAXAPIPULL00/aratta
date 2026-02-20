@@ -6,15 +6,66 @@ sees) and the Gemini side (what the adapter handles for you).
 
 ---
 
+## SDK
+
+The Google adapter uses the official `google-genai` SDK. Install with:
+
+```bash
+pip install aratta[google]
+```
+
+The adapter creates a `google.genai.Client` and uses
+`client.aio.models.generate_content()` for async chat completions.
+
+---
+
 ## Models
 
-| Alias | Gemini Model ID | Notes |
-|-------|-----------------|-------|
-| `fast` | gemini-3-flash-preview | Speed optimized (default fast) |
-| `cheap` | gemini-2.5-flash-lite | Cost optimized |
-| (configurable) | gemini-3-pro-preview | Highest capability |
+8 models across three generations:
+
+### Gemini 3.1
+
+| Alias | Gemini Model ID | Context | Output | Pricing (in/out per MTok) | Notes |
+|-------|-----------------|---------|--------|---------------------------|-------|
+| `gemini-pro` / `gemini-3.1` | gemini-3.1-pro-preview | 1M | 65k | $2 / $12 | Latest Pro, reasoning + agentic |
+| — | gemini-3.1-pro-preview-customtools | 1M | 65k | $2 / $12 | Custom tool use optimized |
+
+### Gemini 3
+
+| Alias | Gemini Model ID | Context | Output | Pricing (in/out per MTok) | Notes |
+|-------|-----------------|---------|--------|---------------------------|-------|
+| — | gemini-3-pro-preview | 1M | 64k | $2 / $12 | Pro reasoning |
+| `fast` | gemini-3-flash-preview | 1M | 64k | $0.50 / $3 | Speed optimized (default fast) |
+| `image` | gemini-3-pro-image-preview | 1M | 64k | $2 / $12 | Image generation |
+
+### Gemini 2.5
+
+| Alias | Gemini Model ID | Context | Output | Pricing (in/out per MTok) | Notes |
+|-------|-----------------|---------|--------|---------------------------|-------|
+| — | gemini-2.5-pro | 1M | 64k | $1.25 / $5 | Previous gen pro |
+| — | gemini-2.5-flash | 1M | 64k | $0.15 / $0.60 | Previous gen flash |
+| `cheap` | gemini-2.5-flash-lite | 1M | 64k | $0.075 / $0.30 | Lowest cost |
 
 Aliases are configurable in `~/.aratta/config.toml`.
+
+---
+
+## API Pattern
+
+```python
+# SDK pattern (what the adapter does internally)
+client = genai.Client(api_key="...")
+response = await client.aio.models.generate_content(
+    model="gemini-3.1-pro-preview",
+    contents=[...],
+    config={
+        "system_instruction": "...",
+        "temperature": 0.7,
+        "tools": [...],
+        "thinking_config": {"thinking_level": "high"},
+    },
+)
+```
 
 ---
 
@@ -22,7 +73,7 @@ Aliases are configurable in `~/.aratta/config.toml`.
 
 | SCRI Role | Gemini Role | Notes |
 |-----------|-------------|-------|
-| `Role.SYSTEM` | N/A (uses `systemInstruction`) | Separate field |
+| `Role.SYSTEM` | N/A (uses `system_instruction`) | Separate config field |
 | `Role.USER` | `"user"` | Direct mapping |
 | `Role.ASSISTANT` | `"model"` | Gemini uses "model" |
 | `Role.TOOL` | `"user"` with functionResponse | Tool results from user |
@@ -54,7 +105,7 @@ Aliases are configurable in `~/.aratta/config.toml`.
 
 ## Thinking Configuration
 
-### Gemini 3 (thinking_level)
+### Gemini 3 / 3.1 (thinking_level)
 
 | Budget Range | Gemini Config | Notes |
 |-------------|---------------|-------|
@@ -71,11 +122,11 @@ Direct token budget mapping: `thinkingBudget: N`
 # SCRI request
 ChatRequest(thinking_enabled=True, thinking_budget=10000)
 
-# → Gemini 3 request
-{"generationConfig": {"thinkingConfig": {"thinkingLevel": "high"}}}
+# → Gemini 3.x config
+{"thinking_config": {"thinking_level": "high"}}
 
-# → Gemini 2.5 request
-{"generationConfig": {"thinkingConfig": {"thinkingBudget": 10000}}}
+# → Gemini 2.5 config
+{"thinking_config": {"thinking_budget": 10000}}
 ```
 
 ---
@@ -95,15 +146,15 @@ ChatRequest(thinking_enabled=True, thinking_budget=10000)
 # SCRI tool
 Tool(name="get_weather", description="Get weather", parameters={...})
 
-# → Gemini tool
-{"tools": [{"functionDeclarations": [{"name": "get_weather", "description": "Get weather", "parameters": {...}}]}]}
+# → Gemini tool (via SDK)
+{"functionDeclarations": [{"name": "get_weather", "description": "Get weather", "parameters": {...}}]}
 ```
 
 ### Tool Call Response
 
 ```python
-# Gemini response
-{"candidates": [{"content": {"parts": [{"functionCall": {"name": "get_weather", "args": {"location": "NYC"}}, "thoughtSignature": "<sig>"}]}}]}
+# SDK response part
+part.function_call  # FunctionCall(name="get_weather", args={"location": "NYC"})
 
 # → SCRI response
 ChatResponse(tool_calls=[ToolCall(id="call_...", name="get_weather", arguments={"location": "NYC"})])
@@ -115,7 +166,7 @@ ChatResponse(tool_calls=[ToolCall(id="call_...", name="get_weather", arguments={
 # SCRI message
 Message(role=Role.TOOL, content=[Content(type=ContentType.TOOL_RESULT, tool_name="get_weather", tool_result={"temp": "15C"})])
 
-# → Gemini message
+# → Gemini content
 {"role": "user", "parts": [{"functionResponse": {"name": "get_weather", "response": {"temp": "15C"}}}]}
 ```
 
@@ -133,14 +184,16 @@ Message(role=Role.TOOL, content=[Content(type=ContentType.TOOL_RESULT, tool_name
 
 ## System Instruction
 
-Gemini uses a separate field for system messages:
+Gemini uses a separate config field for system messages. The adapter
+extracts SYSTEM role messages and passes them as `system_instruction`:
 
 ```python
 # SCRI messages
 [Message(role=Role.SYSTEM, content="You are helpful"), Message(role=Role.USER, content="Hello")]
 
-# → Gemini request
-{"systemInstruction": {"parts": [{"text": "You are helpful"}]}, "contents": [{"role": "user", "parts": [{"text": "Hello"}]}]}
+# → SDK call
+config={"system_instruction": "You are helpful"}
+contents=[{"role": "user", "parts": [{"text": "Hello"}]}]
 ```
 
 ---
@@ -158,12 +211,12 @@ other models, use the bypass signature:
 
 ## Usage Mapping
 
-| SCRI Field | Gemini Field |
-|------------|--------------|
-| `Usage.input_tokens` | `usageMetadata.promptTokenCount` |
-| `Usage.output_tokens` | `usageMetadata.candidatesTokenCount` |
-| `Usage.total_tokens` | `usageMetadata.totalTokenCount` |
-| `Usage.cache_read_tokens` | `usageMetadata.cachedContentTokenCount` |
+| SCRI Field | Gemini SDK Field |
+|------------|------------------|
+| `Usage.input_tokens` | `usage_metadata.prompt_token_count` |
+| `Usage.output_tokens` | `usage_metadata.candidates_token_count` |
+| `Usage.total_tokens` | `usage_metadata.total_token_count` |
+| `Usage.cache_read_tokens` | `usage_metadata.cached_content_token_count` |
 
 ---
 
@@ -195,26 +248,13 @@ other models, use the bypass signature:
 ## Embeddings
 
 ```python
-# SCRI request
-EmbeddingRequest(input=["text1", "text2"], model="gemini-embedding-001")
-
-# → Gemini batch request
-{"requests": [
-    {"model": "models/gemini-embedding-001", "content": {"parts": [{"text": "text1"}]}},
-    {"model": "models/gemini-embedding-001", "content": {"parts": [{"text": "text2"}]}}
-]}
+# SDK pattern
+response = await client.aio.models.embed_content(
+    model="gemini-embedding-001",
+    contents=["text1", "text2"],
+)
+# response.embeddings → list of embedding objects with .values
 ```
-
----
-
-## API Endpoints
-
-| Operation | Gemini Endpoint |
-|-----------|-----------------|
-| Chat | `POST /v1beta/models/{model}:generateContent` |
-| Stream | `POST /v1beta/models/{model}:streamGenerateContent?alt=sse` |
-| Count Tokens | `POST /v1beta/models/{model}:countTokens` |
-| Embed (batch) | `POST /v1beta/models/{model}:batchEmbedContents` |
 
 ---
 

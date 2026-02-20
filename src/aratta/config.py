@@ -83,7 +83,7 @@ DEFAULT_CLOUD_PROVIDERS: dict[str, ProviderConfig] = {
         name="openai",
         base_url="https://api.openai.com/v1",
         api_key_env="OPENAI_API_KEY",
-        default_model="gpt-4.1",
+        default_model="gpt-5.2",
         priority=ProviderPriority.SECONDARY.value,
     ),
     "google": ProviderConfig(
@@ -148,16 +148,19 @@ DEFAULT_MODEL_ALIASES: dict[str, str] = {
     "haiku": "anthropic:claude-haiku-4-5-20251001",
 
     # ── OpenAI ────────────────────────────────────────────────────────
-    "gpt": "openai:gpt-4.1",
-    "gpt-mini": "openai:gpt-4.1-mini",
+    "gpt": "openai:gpt-5.2",
+    "gpt-mini": "openai:gpt-5-mini",
     "o3": "openai:o3",
 
     # ── Google ────────────────────────────────────────────────────────
     "gemini": "google:gemini-3-flash-preview",
-    "gemini-pro": "google:gemini-3-pro-preview",
+    "gemini-pro": "google:gemini-3.1-pro-preview",
+    "gemini-3.1": "google:gemini-3.1-pro-preview",
+    "image": "google:gemini-3-pro-image-preview",
 
     # ── xAI ───────────────────────────────────────────────────────────
     "grok": "xai:grok-4-1-fast",
+    "grok-reason": "xai:grok-4-1-fast-reasoning",
 
     # ── Embeddings ────────────────────────────────────────────────────
     "embed": "openai:text-embedding-3-large",

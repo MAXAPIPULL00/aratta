@@ -6,14 +6,58 @@ and the OpenAI side (what the adapter handles for you).
 
 ---
 
+## SDK
+
+The OpenAI adapter uses the official `openai` Python SDK. Install with:
+
+```bash
+pip install aratta[openai-sdk]
+```
+
+The adapter creates an `openai.AsyncOpenAI` client and supports both the
+Responses API (default) and Chat Completions API (legacy) via the
+`use_responses_api` flag.
+
+---
+
+## Models
+
+7 models across three generations:
+
+### GPT-5.2 Series
+
+| Alias | Model ID | Context | Pricing (in/out per MTok) | Use Case |
+|-------|----------|---------|---------------------------|----------|
+| `gpt` | gpt-5.2 | 1M | $1.75 / $14 | Flagship chat + reasoning |
+| — | gpt-5.2-pro | 1M | $3 / $18 | Maximum capability, reasoning |
+| — | gpt-5.2-codex | 1M | $1.75 / $14 | Code generation |
+
+### GPT-4.1 Series
+
+| Alias | Model ID | Context | Pricing (in/out per MTok) | Use Case |
+|-------|----------|---------|---------------------------|----------|
+| — | gpt-4.1 | 1M | $2 / $8 | Previous gen flagship |
+| `gpt-mini` | gpt-4.1-mini | 1M | $0.40 / $1.60 | Fast, cost-effective |
+| — | gpt-4.1-nano | 1M | $0.10 / $0.40 | Ultra fast |
+
+### O-Series
+
+| Alias | Model ID | Context | Pricing (in/out per MTok) | Use Case |
+|-------|----------|---------|---------------------------|----------|
+| `o3` | o3 | 200k | $2 / $8 | Deep reasoning |
+
+Aliases are configurable in `~/.aratta/config.toml`.
+
+---
+
 ## API Endpoints
 
-| OpenAI | Adapter Method | Notes |
-|--------|----------------|-------|
-| POST /v1/responses | `chat()` | Primary API (recommended) |
-| POST /v1/responses (stream) | `chat_stream()` | SSE streaming |
-| POST /v1/chat/completions | `chat()` | Legacy API |
-| POST /v1/embeddings | `embed()` | Embeddings |
+| OpenAI SDK Method | Adapter Method | Notes |
+|-------------------|----------------|-------|
+| `client.responses.create()` | `chat()` | Primary API (recommended) |
+| `client.chat.completions.create()` | `chat()` | Legacy API (`use_responses_api=False`) |
+| `client.chat.completions.create(stream=True)` | `chat_stream()` | SSE streaming |
+| `client.embeddings.create()` | `embed()` | Embeddings |
 
 ---
 
@@ -27,12 +71,10 @@ and the OpenAI side (what the adapter handles for you).
 | `input` | `ChatRequest.messages` | Can be string or array |
 | `instructions` | System message | Extracted from messages |
 | `reasoning.effort` | Reasoning effort | none/low/medium/high/xhigh |
-| `text.verbosity` | Verbosity | low/medium/high |
 | `max_output_tokens` | `ChatRequest.max_tokens` | Renamed |
 | `temperature` | `ChatRequest.temperature` | Direct |
 | `tools` | `ChatRequest.tools` | Function + built-in |
 | `tool_choice` | `ChatRequest.tool_choice` | Direct |
-| `stream` | `ChatRequest.stream` | Direct |
 
 ### Chat Completions API
 
@@ -54,12 +96,12 @@ and the OpenAI side (what the adapter handles for you).
 
 | OpenAI | SCRI | Notes |
 |--------|------|-------|
-| `id` | `ChatResponse.id` | Response ID |
-| `output_text` | `ChatResponse.content` | Helper field |
+| `response.id` | `ChatResponse.id` | Response ID |
+| `response.output_text` | `ChatResponse.content` | Helper field |
 | `output[type=message]` | `ChatResponse.content` | Message item |
 | `output[type=function_call]` | `ChatResponse.tool_calls` | Tool call item |
 | `output[type=reasoning]` | `ChatResponse.thinking` | Reasoning block |
-| `status` | `ChatResponse.finish_reason` | Mapped |
+| `response.status` | `ChatResponse.finish_reason` | Mapped |
 | `usage.input_tokens` | `Usage.input_tokens` | Direct |
 | `usage.output_tokens` | `Usage.output_tokens` | Direct |
 | `usage.input_tokens_details.cached_tokens` | `Usage.cache_read_tokens` | Renamed |
@@ -105,7 +147,7 @@ and the OpenAI side (what the adapter handles for you).
 
 ```json
 // OpenAI
-{"type": "function", "name": "get_weather", "description": "...", "parameters": {...}}
+{"type": "function", "name": "get_weather", "description": "...", "parameters": {...}, "strict": true}
 
 // SCRI
 Tool(name="get_weather", description="...", parameters={...})
@@ -150,12 +192,12 @@ For o-series models, reasoning is always enabled.
 
 ## Embedding Mapping
 
-| OpenAI | SCRI |
-|--------|------|
-| `data[].embedding` | `Embedding.embedding` |
-| `data[].index` | `Embedding.index` |
-| `usage.prompt_tokens` | `Usage.input_tokens` |
-| `usage.total_tokens` | `Usage.total_tokens` |
+| OpenAI SDK | SCRI |
+|------------|------|
+| `response.data[].embedding` | `Embedding.embedding` |
+| `response.data[].index` | `Embedding.index` |
+| `response.usage.prompt_tokens` | `Usage.input_tokens` |
+| `response.usage.total_tokens` | `Usage.total_tokens` |
 
 ---
 
@@ -163,6 +205,7 @@ For o-series models, reasoning is always enabled.
 
 | Feature | OpenAI | Anthropic |
 |---------|--------|-----------|
+| SDK | `openai` | `anthropic` |
 | Thinking blocks | `reasoning` item | `thinking` block |
 | Effort control | `reasoning.effort` | `thinking.budget_tokens` |
 | Built-in tools | Native types | Beta headers |

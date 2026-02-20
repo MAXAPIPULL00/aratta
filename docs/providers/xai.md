@@ -6,55 +6,123 @@ and the Grok side (what the adapter handles for you).
 
 ---
 
+## SDK
+
+The xAI adapter uses the official `xai_sdk` package with gRPC transport
+via the Responses API. Install with:
+
+```bash
+pip install aratta[xai]
+```
+
+The adapter creates an `xai_sdk.Client` and uses the
+`client.chat.create()` + `conversation.sample()` pattern for chat
+completions.
+
+---
+
 ## Models
 
-| Alias | xAI Model | Use Case |
-|-------|-----------|----------|
-| `grok` | grok-4-1-fast | Default Grok alias |
-| (configurable) | grok-4 | Deep reasoning |
-| (configurable) | grok-4-fast | Fast agentic |
-| (configurable) | grok-2-vision | Image analysis |
+| Alias | xAI Model | Context | Pricing (in/out per MTok) | Use Case |
+|-------|-----------|---------|---------------------------|----------|
+| `grok` | grok-4-1-fast | 2M | $2 / $10 | Default Grok alias, agentic/research |
+| `grok-reason` | grok-4-1-fast-reasoning | 2M | $2 / $10 | Reasoning with thinking traces |
+| (configurable) | grok-4 | 256k | $3 / $15 | Deep reasoning |
+| (configurable) | grok-4-fast | 131k | $2 / $10 | Fast agentic |
 
 Aliases are configurable in `~/.aratta/config.toml`.
 
 ---
 
-## API Endpoints
+## API Pattern
 
-| xAI | Adapter Method | Notes |
-|-----|----------------|-------|
-| POST /v1/chat/completions | `chat()` | Primary chat endpoint |
-| POST /v1/chat/completions (stream) | `chat_stream()` | With verbose_streaming |
-| POST /v1/embeddings | `embed()` | Embeddings |
+The adapter uses the xAI SDK's Responses API pattern instead of the
+legacy Chat Completions REST API:
+
+```python
+# SDK pattern (what the adapter does internally)
+client = xai_sdk.Client(api_key="...")
+conversation = client.chat.create(
+    model="grok-4-1-fast",
+    messages=[...],
+    tools=[...],
+    previous_response_id="resp_abc123",  # conversation chaining
+    store=True,                          # server-side persistence
+)
+response = await conversation.sample()
+```
+
+| Feature | Description |
+|---------|-------------|
+| `client.chat.create()` | Creates a conversation with model, messages, tools |
+| `conversation.sample()` | Produces a response (async) |
+| `conversation.stream()` | Produces streaming chunks (async iterator) |
+
+---
+
+## Conversation Chaining
+
+The Responses API supports stateful conversations via `previous_response_id`.
+Pass it in request metadata:
+
+```python
+ChatRequest(
+    messages=[...],
+    model="grok-4-1-fast",
+    metadata={"previous_response_id": "resp_abc123"},
+)
+```
+
+The adapter passes this to the SDK, which chains the conversation
+server-side without resending the full message history.
+
+---
+
+## Server-Side Message Persistence
+
+Enable `store_messages` in metadata to persist messages on xAI's servers:
+
+```python
+ChatRequest(
+    messages=[...],
+    model="grok-4-1-fast",
+    metadata={"store_messages": True},
+)
+```
+
+The adapter sets `store=True` on the SDK call, enabling server-side
+message storage for later retrieval or conversation continuation.
 
 ---
 
 ## Request Parameters
 
-| xAI | SCRI Type | Notes |
-|-----|-----------|-------|
+| xAI SDK | SCRI Type | Notes |
+|---------|-----------|-------|
 | `model` | `ChatRequest.model` | Direct |
-| `messages` | `ChatRequest.messages` | Direct |
-| `tools` | Server-side tools | Built-in tools |
+| `messages` | `ChatRequest.messages` | Converted via `convert_messages()` |
+| `tools` | `ChatRequest.tools` + builtin | Merged user + server-side tools |
 | `max_tokens` | `ChatRequest.max_tokens` | Direct |
 | `temperature` | `ChatRequest.temperature` | Direct |
-| `top_p` | `ChatRequest.top_p` | Direct |
+| `previous_response_id` | `ChatRequest.metadata["previous_response_id"]` | Conversation chaining |
+| `store` | `ChatRequest.metadata["store_messages"]` | Server-side persistence |
+| `use_encrypted_content` | `ChatRequest.thinking_enabled` | Encrypted thinking traces |
 
 ---
 
 ## Response Mapping
 
-| xAI | SCRI | Notes |
-|-----|------|-------|
-| `id` | `ChatResponse.id` | Response ID |
-| `choices[0].message.content` | `ChatResponse.content` | Direct |
-| `choices[0].message.tool_calls` | `ChatResponse.tool_calls` | Client-side only |
-| `choices[0].finish_reason` | `ChatResponse.finish_reason` | Mapped |
-| `model` | `ChatResponse.model` | Direct |
-| `usage.prompt_tokens` | `Usage.input_tokens` | Renamed |
-| `usage.completion_tokens` | `Usage.output_tokens` | Renamed |
-| `usage.reasoning_tokens` | `Usage.reasoning_tokens` | Direct |
-| `usage.cached_prompt_text_tokens` | `Usage.cache_read_tokens` | Renamed |
+| xAI SDK | SCRI | Notes |
+|---------|------|-------|
+| `response.id` | `ChatResponse.id` | Response ID |
+| `response.content` | `ChatResponse.content` | Text content (joined if list) |
+| `response.tool_calls` | `ChatResponse.tool_calls` | Client-side function calls |
+| `response.finish_reason` | `ChatResponse.finish_reason` | Mapped to FinishReason enum |
+| `response.model` | `ChatResponse.model` | Direct |
+| `response.usage.prompt_tokens` | `Usage.input_tokens` | Renamed |
+| `response.usage.completion_tokens` | `Usage.output_tokens` | Renamed |
+| `response.usage.reasoning_tokens` | `Usage.reasoning_tokens` | Direct |
+| `response.thinking` / `encrypted_content` | `ChatResponse.thinking` | ThinkingBlock list |
 
 ---
 
@@ -73,22 +141,48 @@ Aliases are configurable in `~/.aratta/config.toml`.
 
 | xAI | SCRI |
 |-----|------|
-| `system` / `developer` | `Role.SYSTEM` |
+| `system` | `Role.SYSTEM` |
 | `user` | `Role.USER` |
 | `assistant` | `Role.ASSISTANT` |
 | `tool` | `Role.TOOL` |
 
 ---
 
+## Encrypted Thinking Traces
+
+Grok 4 and grok-4-1-fast-reasoning support thinking traces via encrypted
+content. When `thinking_enabled=True`, the adapter sets
+`use_encrypted_content=True` on the SDK call. Thinking traces are mapped
+to SCRI `ThinkingBlock` objects with optional `signature` fields.
+
+```python
+# Response thinking blocks
+response.thinking  # → [ThinkingBlock(thinking="...", signature="...")]
+```
+
+---
+
 ## Server-Side Tools
 
-| xAI Tool | Description |
-|----------|-------------|
-| `web_search` | Web search + page browsing |
-| `x_search` | X/Twitter search (user, keyword, semantic) |
-| `code_execution` | Python sandbox |
-| `collections_search` | Document collection search |
-| `attachment_search` | Auto-enabled with file uploads |
+| xAI Tool | Cost per 1K calls | Description |
+|----------|--------------------|-------------|
+| `web_search` | $5.00 | Web search + page browsing |
+| `x_search` | $5.00 | X/Twitter search (user, keyword, semantic) |
+| `code_execution` | $5.00 | Python sandbox |
+| `collections_search` | $2.50 | Document collection search |
+
+Server-side tools are passed via the `builtin_tools` parameter on `chat()`:
+
+```python
+await provider.chat(
+    request,
+    builtin_tools=["web_search", "x_search"],
+    collection_ids=["col_abc123"],
+)
+```
+
+The adapter merges these with any user-defined function tools via
+`_build_tools()`.
 
 ### Search Modes
 
@@ -107,17 +201,6 @@ Aliases are configurable in `~/.aratta/config.toml`.
 
 ---
 
-## Collections API
-
-| Operation | xAI Endpoint |
-|-----------|--------------|
-| Create collection | `POST /v1/collections` |
-| List collections | `GET /v1/collections` |
-| Upload document | `POST /v1/collections/:id/documents` |
-| Search documents | `POST /v1/documents/search` |
-
----
-
 ## Tool Call Types
 
 | xAI Type | Meaning | Client Action |
@@ -127,6 +210,17 @@ Aliases are configurable in `~/.aratta/config.toml`.
 | `x_search_call` | Server-side X search | None |
 | `code_interpreter_call` | Server-side code exec | None |
 | `file_search_call` | Server-side collection search | None |
+
+---
+
+## Collections API
+
+| Operation | xAI Endpoint |
+|-----------|--------------|
+| Create collection | `POST /v1/collections` |
+| List collections | `GET /v1/collections` |
+| Upload document | `POST /v1/collections/:id/documents` |
+| Search documents | `POST /v1/documents/search` |
 
 ---
 
@@ -157,23 +251,14 @@ the research provider falls back through xai → openai → google → anthropic
 
 | Feature | xAI | Anthropic | OpenAI |
 |---------|-----|-----------|--------|
+| SDK | `xai_sdk` (gRPC) | `anthropic` | `openai` |
+| API pattern | Responses API | Messages API | Responses API |
 | X/Twitter search | Native | Not available | Not available |
 | Collections | Native API | Not available | Vector stores |
-| Web search | `web_search` + `browse_page` | Not available | `web_search` |
+| Web search | `web_search` | Not available | `web_search` |
 | Thinking | `encrypted_content` | Explicit `thinking` blocks | `reasoning` items |
+| Conversation chaining | `previous_response_id` | Manual | `previous_response_id` |
 | Citations | All + inline | Not structured | Not structured |
-
----
-
-## Pricing (Tool Invocations)
-
-| Tool | Cost per 1K calls |
-|------|-------------------|
-| web_search | $10.00 |
-| x_search | $10.00 |
-| code_execution | Variable (compute) |
-| collections_search | $2.50 |
-| attachment_search | $10.00 |
 
 ---
 
