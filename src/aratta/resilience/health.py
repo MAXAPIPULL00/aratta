@@ -124,7 +124,7 @@ class HealthMonitor:
             try:
                 await cb(err.provider, err, recent)
             except Exception as e:
-                logger.error(f"Heal callback error: {e}")
+                logger.error(f"Heal callback error: {e}", exc_info=True)
 
     async def handle_heal_complete(self, provider: str, success: bool):
         self.healing_in_progress.discard(provider)

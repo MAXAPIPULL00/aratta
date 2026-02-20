@@ -201,6 +201,7 @@ class ArattaConfig:
     self_healing_enabled: bool = True
     auto_apply_fixes: bool = False
     heal_model: str = "local"  # model alias used for self-diagnosis
+    research_model: str = "grok"  # model alias for web-search-capable research
     error_threshold: int = 3
     error_window_seconds: int = 300
     heal_cooldown_seconds: int = 600
@@ -320,6 +321,8 @@ def _apply_toml(config: ArattaConfig, data: dict[str, Any]) -> None:
         config.auto_apply_fixes = healing["auto_apply"]
     if "heal_model" in healing:
         config.heal_model = healing["heal_model"]
+    if "research_model" in healing:
+        config.research_model = healing["research_model"]
     if "error_threshold" in healing:
         config.error_threshold = int(healing["error_threshold"])
     if "cooldown_seconds" in healing:

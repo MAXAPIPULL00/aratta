@@ -96,8 +96,8 @@ class AgentLoop:
             for cb in self.agent._on_tool_call:
                 try:
                     cb(name, args)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Tool call callback failed for {name}: {e}")
             start = time.time()
             if self.context and self.context.tool_executor:
                 r = await self.context.tool_executor.execute(name, args)

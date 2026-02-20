@@ -32,6 +32,7 @@ Observability:
 from __future__ import annotations
 
 import logging
+import threading
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -54,7 +55,8 @@ logger = logging.getLogger("aratta.server")
 # Global state
 # ---------------------------------------------------------------------------
 _providers: dict[str, BaseProvider] = {}
-_config: ArattaConfig = None  # type: ignore[assignment]
+_provider_lock: threading.Lock = threading.Lock()
+_config: ArattaConfig | None = None
 _circuit_breaker: CircuitBreaker | None = None
 _health_monitor: HealthMonitor | None = None
 _reload_manager: ReloadManager | None = None
@@ -67,33 +69,38 @@ _metrics = get_metrics()
 # ---------------------------------------------------------------------------
 
 def _get_provider(name: str) -> BaseProvider:
-    """Get or lazily create a provider adapter."""
+    """Get or lazily create a provider adapter (thread-safe)."""
     if name in _providers:
         return _providers[name]
 
-    cfg = _config.get_provider(name)
-    if not cfg:
-        raise HTTPException(404, f"Provider '{name}' not configured")
+    with _provider_lock:
+        # Double-check after acquiring lock
+        if name in _providers:
+            return _providers[name]
 
-    if name == "anthropic":
-        from aratta.providers.anthropic import AnthropicProvider
-        _providers[name] = AnthropicProvider(cfg)
-    elif name == "openai":
-        from aratta.providers.openai import OpenAIProvider
-        _providers[name] = OpenAIProvider(cfg)
-    elif name == "google":
-        from aratta.providers.google import GoogleProvider
-        _providers[name] = GoogleProvider(cfg)
-    elif name == "xai":
-        from aratta.providers.xai import XAIProvider
-        _providers[name] = XAIProvider(cfg)
-    elif name in ("ollama", "vllm", "llamacpp"):
-        from aratta.providers.local import LocalProvider
-        _providers[name] = LocalProvider(cfg)
-    else:
-        raise HTTPException(400, f"No adapter for provider '{name}'")
+        cfg = _config.get_provider(name) if _config else None
+        if not cfg:
+            raise HTTPException(404, f"Provider '{name}' not configured")
 
-    return _providers[name]
+        if name == "anthropic":
+            from aratta.providers.anthropic import AnthropicProvider
+            _providers[name] = AnthropicProvider(cfg)
+        elif name == "openai":
+            from aratta.providers.openai import OpenAIProvider
+            _providers[name] = OpenAIProvider(cfg)
+        elif name == "google":
+            from aratta.providers.google import GoogleProvider
+            _providers[name] = GoogleProvider(cfg)
+        elif name == "xai":
+            from aratta.providers.xai import XAIProvider
+            _providers[name] = XAIProvider(cfg)
+        elif name in ("ollama", "vllm", "llamacpp"):
+            from aratta.providers.local import LocalProvider
+            _providers[name] = LocalProvider(cfg)
+        else:
+            raise HTTPException(400, f"No adapter for provider '{name}'")
+
+        return _providers[name]
 
 
 def _get_provider_with_fallback(model_str: str) -> tuple[BaseProvider, str, str]:
@@ -109,7 +116,8 @@ def _get_provider_with_fallback(model_str: str) -> tuple[BaseProvider, str, str]
     try:
         provider = _get_provider(provider_name)
         return provider, provider_name, model_id
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Primary provider {provider_name} failed: {e}")
         if not _config.enable_fallback:
             raise
 
@@ -123,7 +131,8 @@ def _get_provider_with_fallback(model_str: str) -> tuple[BaseProvider, str, str]
             fallback_model = fallback_cfg.default_model if fallback_cfg else model_id
             logger.warning(f"Provider {provider_name} unavailable, falling back to {fallback_name}")
             return fallback, fallback_name, fallback_model
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Fallback provider {fallback_name} also unavailable: {e}")
             continue
 
     raise HTTPException(503, f"No available providers (primary: {provider_name})")
@@ -133,7 +142,7 @@ def _get_provider_with_fallback(model_str: str) -> tuple[BaseProvider, str, str]
 # Self-healing callback
 # ---------------------------------------------------------------------------
 
-async def _on_heal_request(provider: str, error, recent_errors: list):
+async def _on_heal_request(provider: str, error: Any, recent_errors: list[Any]) -> None:
     """Called by HealthMonitor when healing threshold is reached."""
     if not _heal_worker or not _reload_manager:
         logger.warning(f"Heal requested for {provider} but heal worker not available")
@@ -161,7 +170,8 @@ async def _on_heal_request(provider: str, error, recent_errors: list):
             p = _get_provider(prov)
             health = await p.health_check()
             return health.get("status") == "healthy"
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Heal verification failed for {prov}: {e}")
             return False
 
     # Apply via ReloadManager
@@ -211,8 +221,9 @@ async def lifespan(app: FastAPI):
             get_provider_fn=_get_provider,
             resolve_model_fn=_config.resolve_model,
             heal_model=_config.heal_model,
-            research_model="grok",  # web search capable
+            research_model=_config.research_model,
             research_web_search=True,
+            cloud_providers=_config.get_available_providers(),
         )
 
         # Wire the heal callback: when HealthMonitor detects enough errors,
@@ -279,8 +290,8 @@ def create_app() -> FastAPI:
             try:
                 provider = _get_provider(name)
                 models.extend([m.to_dict() for m in provider.get_models()])
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Provider {name} models unavailable: {e}")
         return {"models": models, "aliases": _config.model_aliases}
 
     # ==================================================================
@@ -334,6 +345,7 @@ def create_app() -> FastAPI:
             raise HTTPException(e.status_code or 502, e.message) from None
 
         except Exception as e:
+            logger.error(f"Chat request failed: {e}", exc_info=True)
             if _health_monitor:
                 await _health_monitor.record_error(provider_name, model_id or "unknown", e)
             raise HTTPException(500, str(e)) from None
@@ -376,7 +388,7 @@ def create_app() -> FastAPI:
         status: dict[str, Any] = {
             "enabled": _config.self_healing_enabled,
             "heal_model": _config.heal_model,
-            "research_model": "grok",
+            "research_model": _config.research_model,
             "circuit_breaker_enabled": _config.circuit_breaker_enabled,
         }
         if _health_monitor:
@@ -462,7 +474,8 @@ def create_app() -> FastAPI:
                 p = _get_provider(prov)
                 h = await p.health_check()
                 return h.get("status") == "healthy"
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Post-fix verification failed for {prov}: {e}")
                 return False
 
         result = await _reload_manager.approve_fix(provider, verify_callback=verify)
@@ -510,7 +523,7 @@ def create_app() -> FastAPI:
                 "service": "aratta", "version": "0.1.0",
                 "self_healing_enabled": _config.self_healing_enabled,
                 "heal_model": _config.heal_model,
-                "research_model": "grok",
+                "research_model": _config.research_model,
                 "circuit_breaker_enabled": _config.circuit_breaker_enabled,
             },
             "providers": [],

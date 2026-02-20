@@ -263,13 +263,19 @@ class ReloadManager:
                                   f"Failed: {e}")
 
     async def _apply_code_patch(self, provider: str, fix_code: str) -> bool:
-        """Apply a code patch. Conservative — logs proposal, returns False by default."""
+        """Apply a code patch. Conservative — logs proposal, returns False by design.
+
+        Automatic code patching is intentionally disabled for safety.
+        Patches are logged for human review via the /api/v1/fixes endpoint.
+        """
         adapter_path = self._get_adapter_path(provider)
         if not adapter_path or not adapter_path.exists():
+            logger.warning(f"Cannot propose code patch: adapter path not found for {provider}")
             return False
-        logger.info(f"Proposed code patch for {provider}:\n{fix_code[:500]}...")
-        # Full implementation would use AST-based patching or marked sections.
-        # For safety, requires human review to actually write code.
+        logger.info(
+            f"Code patch proposed for {provider} (requires human review via API):\n"
+            f"{fix_code[:500]}..."
+        )
         return False
 
     async def _reload_module(self, provider: str):

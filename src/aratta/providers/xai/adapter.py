@@ -63,7 +63,7 @@ class XAIProvider(BaseProvider):
         self._sdk_client = xai_sdk.Client(api_key=config.api_key)
 
     # ------------------------------------------------------------------
-    # Message conversion  (SCRI -> xAI SDK format)
+    # Message conversion  (SCRI → xAI SDK format)
     # ------------------------------------------------------------------
 
     def convert_messages(self, messages: list[Message]) -> list[dict[str, Any]]:
@@ -95,7 +95,7 @@ class XAIProvider(BaseProvider):
         return converted
 
     # ------------------------------------------------------------------
-    # Tool conversion  (SCRI -> xAI SDK format)
+    # Tool conversion  (SCRI → xAI SDK format)
     # ------------------------------------------------------------------
 
     def convert_tools(self, tools: list[Tool]) -> list[dict[str, Any]]:
@@ -138,6 +138,7 @@ class XAIProvider(BaseProvider):
             tools.extend(self.convert_tools(user_tools))
 
         return tools if tools else None
+
 
     # ------------------------------------------------------------------
     # Chat  (non-streaming)
@@ -220,8 +221,9 @@ class XAIProvider(BaseProvider):
         except Exception as exc:
             raise ProviderError(str(exc), self.name) from exc
 
+
     # ------------------------------------------------------------------
-    # Embeddings  (not supported by xAI SDK -- stub for interface)
+    # Embeddings  (not supported by xAI SDK — stub for interface)
     # ------------------------------------------------------------------
 
     async def embed(self, request: EmbeddingRequest) -> EmbeddingResponse:
@@ -297,7 +299,7 @@ class XAIProvider(BaseProvider):
         ]
 
     # ------------------------------------------------------------------
-    # Response normalization  (xAI SDK -> SCRI ChatResponse)
+    # Response normalization  (xAI SDK → SCRI ChatResponse)
     # ------------------------------------------------------------------
 
     def _normalize_response(
@@ -310,6 +312,7 @@ class XAIProvider(BaseProvider):
         # Extract content
         content = getattr(response, "content", "") or ""
         if isinstance(content, list):
+            # SDK may return content blocks — join text parts
             text_parts = []
             for part in content:
                 if isinstance(part, dict) and part.get("type") == "text":

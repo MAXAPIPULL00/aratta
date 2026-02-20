@@ -97,12 +97,14 @@ class HealWorker:
         heal_model: str = "local",
         research_model: str = "grok",
         research_web_search: bool = True,
+        cloud_providers: list[str] | None = None,
     ):
         self._get_provider = get_provider_fn
         self._resolve_model = resolve_model_fn
         self.heal_model = heal_model
         self.research_model = research_model
         self.research_web_search = research_web_search
+        self.cloud_providers = cloud_providers or ["xai", "openai", "google", "anthropic"]
 
     async def diagnose(
         self,
@@ -153,13 +155,21 @@ class HealWorker:
             return fix
 
         except Exception as e:
-            logger.error(f"Heal worker failed for {provider}: {e}")
+            logger.error(f"Heal worker failed for {provider}: {e}", exc_info=True)
+            # Categorize the error instead of masking as "no_fix_needed"
+            error_str = str(e).lower()
+            if "auth" in error_str or "401" in error_str or "key" in error_str:
+                fix_type = "auth_error"
+            elif "timeout" in error_str or "connect" in error_str or "temporary" in error_str:
+                fix_type = "transient_error"
+            else:
+                fix_type = "heal_error"
             return {
-                "fix_type": "no_fix_needed",
+                "fix_type": fix_type,
                 "confidence": 0.0,
                 "change_summary": f"Heal cycle failed: {e}",
                 "analysis": str(e),
-                "reasoning": "Could not complete heal cycle",
+                "reasoning": f"Could not complete heal cycle ({fix_type})",
             }
 
     # -----------------------------------------------------------------------
@@ -249,8 +259,7 @@ class HealWorker:
             logger.warning(f"Research model {self.research_model} failed: {e}")
 
         # Fallback: try other cloud providers
-        cloud_providers = ["xai", "openai", "google", "anthropic"]
-        for cloud_name in cloud_providers:
+        for cloud_name in self.cloud_providers:
             if cloud_name == self.research_model.split(":")[0]:
                 continue
             try:

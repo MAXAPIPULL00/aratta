@@ -130,6 +130,7 @@ class BaseProvider(ABC):
             try:
                 msg = response.json().get("error", {}).get("message", response.text)
             except Exception:
+                logger.debug(f"Could not parse JSON error body from {self.name}, using raw text")
                 msg = response.text
             raise ProviderError(msg, self.name, response.status_code)
 

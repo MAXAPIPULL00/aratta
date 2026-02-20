@@ -28,8 +28,11 @@ jobs:
       - name: Lint
         run: ruff check src/ tests/
 
+      - name: Type check
+        run: mypy src/aratta/ --ignore-missing-imports
+
       - name: Test
-        run: pytest --tb=short -q
+        run: pytest --tb=short -q --cov=aratta --cov-fail-under=60
 
   build:
     runs-on: ubuntu-latest

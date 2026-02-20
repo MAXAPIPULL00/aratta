@@ -67,8 +67,8 @@ class Agent:
         for cb in self._on_complete:
             try:
                 cb(result)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Completion callback failed: {e}")
         return result.to_dict() if isinstance(result, LoopResult) else result
 
     def add_message(self, msg: AgentMessage):
